@@ -59,6 +59,8 @@ _bwrap() {
 		--ro-bind
 		--ro-overlay
 		--seccomp
+		--seccomp-default
+		--seccomp-rule
 		--setenv
 		--size
 		--symlink

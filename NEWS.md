@@ -3,6 +3,13 @@ bubblewrap 0.13.2
 
 Released: ...
 
+Enhancements:
+
+  * New `--seccomp-rule` and `--seccomp-default` options allow seccomp
+    policies to be declared on the command line, including predicates on
+    syscall arguments. Declarative rules can be combined with namespace
+    options and with externally supplied seccomp BPF programs.
+
 bubblewrap 0.13.1
 =================
 

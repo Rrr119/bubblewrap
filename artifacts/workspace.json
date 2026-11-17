@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid24401",
+  "B": "/home/dev/feedback/uid24401",
+  "sha": "1fb0aa26d3eb66254f7742e704add7f82f41a582",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "containers",
+    "repo": "bubblewrap",
+    "sha": "1fb0aa26d3eb66254f7742e704add7f82f41a582"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "bubblewrap",
+    "cloneUrl": "https://github.com/Rrr119/bubblewrap.git"
+  },
+  "at": "2026-11-17T21:30:34.282Z"
+}

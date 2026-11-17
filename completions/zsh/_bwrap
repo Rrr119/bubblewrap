@@ -61,6 +61,8 @@ _bwrap_args=(
     '--ro-bind-try[Equal to --ro-bind but ignores non-existent SRC]:source:_files:destination:_files'
     '--ro-bind[Bind mount the host path SRC readonly on DEST]:source:_files:destination:_files'
     '--seccomp[Load and use seccomp rules from FD]: :_guard "[0-9]#" "file descriptor to read seccomp rules from"'
+    '--seccomp-default[Action for syscalls not matched by --seccomp-rule]:seccomp action:'
+    '--seccomp-rule[Add a declarative seccomp rule]:seccomp rule:'
     '--setenv[Set an environment variable]:variable to set:_parameters -g "*export*":value of variable: :'
     '--size[Set size in bytes for next action argument]: :->after_size'
     '--symlink[Create symlink at DEST with target SRC]:symlink target:_files:symlink to create:_files:'

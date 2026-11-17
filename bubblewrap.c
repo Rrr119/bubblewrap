@@ -40,6 +40,7 @@
 #include "utils.h"
 #include "network.h"
 #include "bind-mount.h"
+#include "seccomp.h"
 
 #ifndef CLONE_NEWCGROUP
 #define CLONE_NEWCGROUP 0x02000000 /* New cgroup namespace */
@@ -86,6 +87,8 @@ static int opt_userns_block_fd = -1;
 static int opt_info_fd = -1;
 static int opt_json_status_fd = -1;
 static int opt_seccomp_fd = -1;
+static SeccompPolicy *opt_seccomp_policy = NULL;
+static bool opt_seccomp_default_set = false;
 static const char *opt_sandbox_hostname = NULL;
 static char *opt_args_data = NULL;  /* owned */
 static int opt_userns_fd = -1;
@@ -265,6 +268,17 @@ seccomp_program_new (int *fd)
   return self;
 }
 
+static SeccompProgram *
+seccomp_program_new_from_policy (SeccompPolicy *policy)
+{
+  SeccompProgram *self = _seccomp_program_append_new ();
+  struct sock_fprog *program = seccomp_policy_compile (policy);
+
+  self->program = *program;
+  free (program);
+  return self;
+}
+
 static void
 seccomp_programs_apply (void)
 {
@@ -347,6 +361,8 @@ usage (int ecode, FILE *out)
            "    --symlink SRC DEST           Create symlink at DEST with target SRC\n"
            "    --seccomp FD                 Load and use seccomp rules from FD (not repeatable)\n"
            "    --add-seccomp-fd FD          Load and use seccomp rules from FD (repeatable)\n"
+           "    --seccomp-rule RULE          Add rule: ACTION SYSCALL [argN OP VALUE]... (repeatable)\n"
+           "    --seccomp-default ACTION     Action for syscalls not matched by --seccomp-rule\n"
            "    --block-fd FD                Block on FD until some data to read is available\n"
            "    --userns-block-fd FD         Block on FD until the user namespace is ready\n"
            "    --info-fd FD                 Write information about the running container to FD\n"
@@ -2425,6 +2441,36 @@ parse_args_recurse (int          *argcp,
           argv += 1;
           argc -= 1;
         }
+      else if (strcmp (arg, "--seccomp-rule") == 0)
+        {
+          if (argc < 2)
+            die ("--seccomp-rule takes an argument");
+
+          if (opt_seccomp_policy == NULL)
+            opt_seccomp_policy = seccomp_policy_new ();
+
+          seccomp_policy_add_rule (opt_seccomp_policy, argv[1]);
+
+          argv += 1;
+          argc -= 1;
+        }
+      else if (strcmp (arg, "--seccomp-default") == 0)
+        {
+          if (argc < 2)
+            die ("--seccomp-default takes an argument");
+
+          if (opt_seccomp_default_set)
+            warn_only_last_option ("--seccomp-default");
+
+          if (opt_seccomp_policy == NULL)
+            opt_seccomp_policy = seccomp_policy_new ();
+
+          seccomp_policy_set_default_action (opt_seccomp_policy, argv[1]);
+          opt_seccomp_default_set = true;
+
+          argv += 1;
+          argc -= 1;
+        }
       else if (strcmp (arg, "--userns") == 0)
         {
           int the_fd;
@@ -3441,6 +3487,12 @@ main (int    argc,
       /* takes ownership of fd */
       seccomp_program_new (&opt_seccomp_fd);
     }
+
+  /* Declarative rules are installed after externally supplied filters, so
+   * they have the highest priority when the kernel evaluates the filter
+   * stack. Their default action is ALLOW unless overridden. */
+  if (opt_seccomp_policy != NULL)
+    seccomp_program_new_from_policy (opt_seccomp_policy);
 
   umask (old_umask);
 

@@ -151,6 +151,25 @@ UTS namespace ([CLONE_NEWUTS](https://linux.die.net/man/2/clone)): The sandbox w
 
 Seccomp filters: You can pass in seccomp filters that limit which syscalls can be done in the sandbox. For more information, see [Seccomp](https://en.wikipedia.org/wiki/Seccomp).
 
+Seccomp rules can also be declared on the command line, including conditions
+on syscall arguments. For example, this blocks the `TIOCSTI` terminal ioctl
+while still allowing other ioctls:
+
+```sh
+bwrap --unshare-all --ro-bind / / \
+  --seccomp-rule 'errno:EPERM ioctl arg1 == TIOCSTI' \
+  COMMAND
+```
+
+Rules have the form `ACTION SYSCALL [argN OPERATOR VALUE]...`, can be repeated,
+and can combine `==`, `!=`, bit masks such as `arg1 & 0xffffffff == TIOCSTI`,
+and symbolic values such as `TIOCSTI`. Predicates only compare the raw syscall
+argument registers, not memory addressed by pointer arguments such as path
+strings. They can be used together with any namespace options; the filter is
+installed after namespace setup and immediately before the sandbox command
+runs. See `bwrap --help` or the `bwrap(1)` man page for the complete syntax
+and for `--seccomp-default`.
+
 Limitations
 -----------
 

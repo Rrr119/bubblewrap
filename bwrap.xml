@@ -514,6 +514,87 @@
       </para></listitem>
     </varlistentry>
     <varlistentry>
+      <term><option>--seccomp-rule <arg choice="plain">RULE</arg></option></term>
+      <listitem><para>
+        Add a declarative seccomp rule. This option can be repeated.
+        Each <arg choice="plain">RULE</arg> has the form
+        <literal>ACTION SYSCALL [ARG OPERATOR VALUE]...</literal>.
+        All argument predicates in one rule must match. Rules are evaluated
+        in command-line order, and the first matching rule determines the
+        result.
+      </para><para>
+        <literal>ACTION</literal> is one of <literal>allow</literal>,
+        <literal>kill</literal>, <literal>trap</literal>,
+        <literal>log</literal>, or <literal>errno:ERRNO</literal>.
+        An errno can be numeric or a name such as
+        <literal>EPERM</literal> or <literal>ECONNREFUSED</literal>.
+        <literal>SYSCALL</literal> is a syscall name such as
+        <literal>ioctl</literal> or <literal>openat</literal>, or a numeric
+        syscall number for syscalls that are not in bwrap's name table.
+      </para><para>
+        <literal>ARG</literal> is <literal>arg0</literal> through
+        <literal>arg5</literal>. <literal>OPERATOR</literal> is
+        <literal>==</literal> or <literal>!=</literal>.
+        To compare only selected bits, use
+        <literal>ARG &amp; MASK == VALUE</literal> or
+        <literal>ARG &amp; MASK != VALUE</literal>.
+        <literal>VALUE</literal> and <literal>MASK</literal> can be decimal,
+        hexadecimal with a <literal>0x</literal> prefix, or a named constant
+        such as <literal>TIOCSTI</literal>.
+        Predicates compare the raw 64-bit syscall argument registers; seccomp
+        cannot inspect memory addressed by pointer arguments, such as path
+        strings or socket addresses.
+      </para><para>
+        For example, to reject the terminal-injection
+        <literal>TIOCSTI</literal> ioctl while allowing other ioctls:
+      </para>
+      <programlisting>
+bwrap --unshare-all --ro-bind / / \
+     --seccomp-rule 'errno:EPERM ioctl arg1 == TIOCSTI' \
+     COMMAND
+      </programlisting>
+      <para>
+        To also reject the historical 64-bit variant of that ioctl, mask the
+        argument to its low 32 bits:
+      </para>
+      <programlisting>
+--seccomp-rule 'errno:EPERM ioctl arg1 &amp; 0xffffffff == TIOCSTI'
+      </programlisting>
+      <para>
+        Declarative rules can be combined with namespace options such as
+        <option>--unshare-user</option>, <option>--unshare-pid</option>,
+        <option>--unshare-net</option>, <option>--unshare-ipc</option> and
+        <option>--unshare-uts</option>. Filters are installed after namespace
+        setup, immediately before the sandbox command is executed.
+      </para><para>
+        Declarative rules can also be combined with
+        <option>--seccomp</option> or <option>--add-seccomp-fd</option>.
+        The declarative filter is installed last, so it is evaluated before
+        externally supplied filters. If it does not match a syscall, it uses
+        the action selected by <option>--seccomp-default</option> (normally
+        <literal>allow</literal>), allowing evaluation to continue with the
+        externally supplied filters.
+      </para><para>
+        Argument filters are generated for the native syscall ABI only.
+        Processes using a non-native ABI in the sandbox are rejected with
+        <literal>ENOSYS</literal> while declarative rules are active.
+      </para></listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--seccomp-default <arg choice="plain">ACTION</arg></option></term>
+      <listitem><para>
+        Select the action for syscalls that are not matched by any
+        <option>--seccomp-rule</option>. It accepts the same actions as
+        <option>--seccomp-rule</option>. The default is
+        <literal>allow</literal>, which is suitable for deny-list policies.
+        An allow-list policy would typically use
+        <literal>--seccomp-default errno:ENOSYS</literal> plus
+        <literal>allow</literal> rules, and must allow the syscalls needed to
+        start the sandbox command.
+        If this option is given more than once, only the last one is used.
+      </para></listitem>
+    </varlistentry>
+    <varlistentry>
       <term><option>--exec-label <arg choice="plain">LABEL</arg></option></term>
       <listitem><para>
 	Exec Label from the sandbox. On an SELinux system you can specify the SELinux
