@@ -129,6 +129,7 @@ bwrap = executable(
     'utils.c',
     'chroot_realpath.c',
     'safe_openat.c',
+    'cgroup.c',
   ],
   build_rpath : get_option('build_rpath'),
   install : true,

@@ -38,6 +38,9 @@ _bwrap() {
 		--block-fd
 		--cap-add
 		--cap-drop
+		--cgroup-cpu
+		--cgroup-memory
+		--cgroup-parent
 		--chdir
 		--chmod
 		--dev

@@ -40,6 +40,7 @@
 #include "utils.h"
 #include "network.h"
 #include "bind-mount.h"
+#include "cgroup.h"
 
 #ifndef CLONE_NEWCGROUP
 #define CLONE_NEWCGROUP 0x02000000 /* New cgroup namespace */
@@ -91,6 +92,9 @@ static char *opt_args_data = NULL;  /* owned */
 static int opt_userns_fd = -1;
 static int opt_userns2_fd = -1;
 static int opt_pidns_fd = -1;
+static char *opt_cgroup_cpu = NULL;
+static char *opt_cgroup_memory = NULL;
+static const char *opt_cgroup_parent = NULL;
 static int opt_tmp_overlay_count = 0;
 static int next_perms = -1;
 static size_t next_size_arg = 0;
@@ -306,6 +310,9 @@ usage (int ecode, FILE *out)
            "    --unshare-uts                Create new uts namespace\n"
            "    --unshare-cgroup             Create new cgroup namespace\n"
            "    --unshare-cgroup-try         Create new cgroup namespace if possible else continue by skipping it\n"
+           "    --cgroup-cpu VALUE           Limit CPU usage with cgroup v2 (cores, percent, or 'quota period')\n"
+           "    --cgroup-memory VALUE        Limit memory usage with cgroup v2 (bytes, or K/M/G/T suffix)\n"
+           "    --cgroup-parent PATH         Create the sandbox cgroup below PATH (default: current cgroup)\n"
            "    --userns FD                  Use this user namespace (cannot combine with --unshare-user)\n"
            "    --userns2 FD                 After setup switch to this user namespace, only useful with --userns\n"
            "    --disable-userns             Disable further use of user namespaces inside sandbox\n"
@@ -1914,6 +1921,61 @@ parse_args_recurse (int          *argcp,
           opt_unshare_net = false;
         }
       /* End --share variants, other arguments begin */
+      else if (strcmp (arg, "--cgroup-cpu") == 0 ||
+               strcmp (arg, "--cgroup-cpu-max") == 0 ||
+               strcmp (arg, "--cgroup-cpu-limit") == 0 ||
+               strcmp (arg, "--cgroup-cpu-quota") == 0 ||
+               strcmp (arg, "--cpu-max") == 0 ||
+               strcmp (arg, "--cpu-limit") == 0 ||
+               strcmp (arg, "--cpu-quota") == 0 ||
+               strcmp (arg, "--limit-cpu") == 0)
+        {
+          if (argc < 2)
+            die ("%s takes an argument", arg);
+
+          free (opt_cgroup_cpu);
+          opt_cgroup_cpu = cgroup_parse_cpu (arg, argv[1]);
+          argv++;
+          argc--;
+        }
+      else if (strcmp (arg, "--cgroup-memory") == 0 ||
+               strcmp (arg, "--cgroup-memory-max") == 0 ||
+               strcmp (arg, "--cgroup-memory-limit") == 0 ||
+               strcmp (arg, "--cgroup-mem") == 0 ||
+               strcmp (arg, "--memory-max") == 0 ||
+               strcmp (arg, "--memory-limit") == 0 ||
+               strcmp (arg, "--limit-memory") == 0)
+        {
+          if (argc < 2)
+            die ("%s takes an argument", arg);
+
+          free (opt_cgroup_memory);
+          opt_cgroup_memory = cgroup_parse_memory (arg, argv[1], false);
+          argv++;
+          argc--;
+        }
+      else if (strcmp (arg, "--limit-mem") == 0)
+        {
+          if (argc < 2)
+            die ("%s takes an argument", arg);
+
+          free (opt_cgroup_memory);
+          opt_cgroup_memory = cgroup_parse_memory (arg, argv[1], true);
+          argv++;
+          argc--;
+        }
+      else if (strcmp (arg, "--cgroup-parent") == 0 ||
+               strcmp (arg, "--cgroup-path") == 0 ||
+               strcmp (arg, "--cgroup-base") == 0 ||
+               strcmp (arg, "--cgroup") == 0)
+        {
+          if (argc < 2)
+            die ("%s takes an argument", arg);
+
+          opt_cgroup_parent = argv[1];
+          argv++;
+          argc--;
+        }
       else if (strcmp (arg, "--chdir") == 0)
         {
           if (argc < 2)
@@ -2898,6 +2960,8 @@ main (int    argc,
   const char *exec_path = NULL;
   int i;
   struct sigaction sa = {};
+  CgroupConfig cgroup_config = {0};
+  CgroupManager cgroup_manager = { -1, -1, -1 };
 
   /* Handle --version early on before we try to acquire/drop
    * any capabilities so it works in a build environment;
@@ -3028,6 +3092,10 @@ main (int    argc,
   if (opt_as_pid_1 && lock_files != NULL)
     die ("Specifying --as-pid-1 and --lock-file is not permitted");
 
+  cgroup_config.cpu_max = opt_cgroup_cpu;
+  cgroup_config.memory_max = opt_cgroup_memory;
+  cgroup_config.parent = opt_cgroup_parent;
+
   /* We need to read stuff from proc during the pivot_root dance, etc.
      Lets keep a fd to it open */
   proc_fd = TEMP_FAILURE_RETRY (open ("/proc", O_PATH));
@@ -3096,6 +3164,11 @@ main (int    argc,
         die_with_error ("pipe2()");
     }
 
+  /* Set up cgroup limits before changing user namespaces, so that the
+   * manager process retains the credentials needed to clean up. */
+  if (cgroup_config_is_set (&cgroup_config))
+    cgroup_manager_start (&cgroup_config, &cgroup_manager);
+
   /* Switch to the custom user ns before the clone, gets us privs in that ns (assuming its a child of the current and thus allowed) */
   if (opt_userns_fd != -1 && setns (opt_userns_fd, CLONE_NEWUSER) != 0)
     {
@@ -3115,6 +3188,8 @@ main (int    argc,
   pid = raw_clone (clone_flags, NULL);
   if (pid == -1)
     {
+      cgroup_manager_finish (&cgroup_manager);
+
       if (opt_unshare_user)
         {
           if (errno == EINVAL)
@@ -3142,6 +3217,8 @@ main (int    argc,
           pid = read_pid_from_socket (intermediate_pids_sockets[0]);
           close (intermediate_pids_sockets[0]);
         }
+
+      cgroup_manager_child (&cgroup_manager, pid);
 
       /* Discover namespace ids before we drop privileges */
       namespace_ids_read (pid);
@@ -3186,7 +3263,12 @@ main (int    argc,
       /* Ignore res, if e.g. the child died and closed child_wait_fd we don't want to error out here */
       close (child_wait_fd);
 
-      return monitor_child (event_fd, pid, setup_finished_pipe[0]);
+      {
+        int exitc = monitor_child (event_fd, pid, setup_finished_pipe[0]);
+
+        cgroup_manager_finish (&cgroup_manager);
+        return exitc;
+      }
     }
 
   if (opt_pidns_fd != -1)
@@ -3233,6 +3315,8 @@ main (int    argc,
 
   if (opt_json_status_fd != -1)
     close (opt_json_status_fd);
+
+  cgroup_manager_close_in_child (&cgroup_manager);
 
   /* Wait for the parent to init uid/gid maps and drop caps */
   res = read (child_wait_fd, &val, 8);

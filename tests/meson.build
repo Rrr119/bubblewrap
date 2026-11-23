@@ -21,6 +21,7 @@ test_scripts = [
   'test-seccomp.py',
   'test-specifying-pidns.sh',
   'test-specifying-userns.sh',
+  'test-cgroup.py',
 ]
 
 test_env = environment()

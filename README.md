@@ -149,6 +149,13 @@ Network namespaces ([CLONE_NEWNET](https://linux.die.net/man/2/clone)): The sand
 
 UTS namespace ([CLONE_NEWUTS](https://linux.die.net/man/2/clone)): The sandbox will have its own hostname.
 
+Cgroup v2 limits: `--cgroup-cpu` and `--cgroup-memory` place the sandbox in a
+dedicated cgroup and apply `cpu.max` and `memory.max` to all processes in it.
+The caller must run as root or from a delegated cgroup, because bubblewrap
+does not move unrelated processes out of the caller's cgroup. Limits work
+with the namespace options above, including `--unshare-all` and
+`--unshare-cgroup`.
+
 Seccomp filters: You can pass in seccomp filters that limit which syscalls can be done in the sandbox. For more information, see [Seccomp](https://en.wikipedia.org/wiki/Seccomp).
 
 Limitations

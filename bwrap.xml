@@ -155,6 +155,39 @@
       <listitem><para>Create a new cgroup namespace if possible else skip it</para></listitem>
     </varlistentry>
     <varlistentry>
+      <term><option>--cgroup-cpu <arg choice="plain">VALUE</arg></option></term>
+      <listitem><para>Limit the CPU bandwidth of the sandbox with the cgroup v2
+        <filename>cpu.max</filename> controller. VALUE can be a number of CPU
+        cores (for example <literal>0.5</literal>), a percentage (for example
+        <literal>50%</literal>), <literal>max</literal>, or a raw cgroup v2
+        quota and period such as <literal>50000 100000</literal>.</para>
+        <para>The limit is shared by all processes in the sandbox. The sandbox
+        must be run as root or from a delegated cgroup, and cgroup v2 must be
+        mounted.</para></listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--cgroup-memory <arg choice="plain">VALUE</arg></option></term>
+      <listitem><para>Limit the memory available to the sandbox with the
+        cgroup v2 <filename>memory.max</filename> controller. VALUE is a
+        number of bytes, or a number with a <literal>K</literal>,
+        <literal>M</literal>, <literal>G</literal> or <literal>T</literal>
+        suffix (for example <literal>512M</literal>). For convenience, a bare
+        value smaller than one mebibyte is interpreted as a number of
+        mebibytes. Swap is disabled for the sandbox so that the memory limit
+        cannot be exceeded by swapping out anonymous pages.</para>
+        <para>As with <option>--cgroup-cpu</option>, the sandbox must be run
+        as root or from a delegated cgroup, and cgroup v2 must be
+        mounted.</para></listitem>
+    </varlistentry>
+    <varlistentry>
+      <term><option>--cgroup-parent <arg choice="plain">PATH</arg></option></term>
+      <listitem><para>Create the sandbox's cgroup below PATH instead of below
+        the current cgroup. PATH can be an absolute path in the cgroup v2
+        hierarchy or a path relative to the cgroup v2 mount point. This is
+        mainly useful when the current cgroup is not delegated but a sibling
+        or ancestor cgroup is writable.</para></listitem>
+    </varlistentry>
+    <varlistentry>
       <term><option>--unshare-all</option></term>
       <listitem><para>Unshare all possible namespaces. Currently equivalent with: <option>--unshare-user-try</option> <option>--unshare-ipc</option> <option>--unshare-pid</option> <option>--unshare-net</option> <option>--unshare-uts</option> <option>--unshare-cgroup-try</option></para></listitem>
     </varlistentry>

@@ -3,6 +3,12 @@ bubblewrap 0.13.2
 
 Released: ...
 
+Enhancements:
+
+  * New --cgroup-cpu and --cgroup-memory options apply cgroup v2 CPU and
+    memory limits to a per-sandbox cgroup, including sandboxes that use
+    user, pid, cgroup, or all namespaces.
+
 bubblewrap 0.13.1
 =================
 
